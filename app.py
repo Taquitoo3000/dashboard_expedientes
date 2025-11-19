@@ -57,7 +57,7 @@ app.index_string = '''
 '''
 
 # Cargar datos
-def cargar_datos():
+def cargar_datos_access():
     archivo_access = 'D:/concentrado 2000-2025.mdb'
     conn_str = f'DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={archivo_access};'
     conn = pyodbc.connect(conn_str)
@@ -107,9 +107,56 @@ def cargar_datos():
         
     return df,df2
 
+def cargar_datos_csv():
+    quejas = pd.read_csv('data/quejas.csv')
+    expediente = pd.read_csv('data/expediente.csv')
+        
+    # Merge
+    df = pd.merge(quejas, expediente, on='Expediente', how='inner', suffixes=('', '_expediente'))
+    columnas_duplicadas = [col for col in df.columns if col.endswith('_expediente')]
+    if columnas_duplicadas:
+        print(f"🗑️ Eliminando columnas duplicadas: {columnas_duplicadas}")
+        df = df.drop(columns=columnas_duplicadas)
+    df2=df
+    columnas = [
+    'Expediente', 
+    'SubProcu', 
+    'FechaInicio', 
+    'LugarProcedencia', 
+    'Recepcion', 
+    'Conclusión', 
+    'F_Conclusion', 
+    'GrupoVulnerable'
+    ]
+    columnas_finales = [col for col in columnas if col in df.columns]
+    df = df[columnas_finales].drop_duplicates()
+
+    # Ajustar fechas
+    df['FechaInicio'] = pd.to_datetime(df['FechaInicio'], errors='coerce')
+    df['F_Conclusion'] = pd.to_datetime(df['F_Conclusion'], errors='coerce')
+    df['Año'] = df['FechaInicio'].dt.year
+    df['Mes'] = df['FechaInicio'].dt.month
+    df = df[df['Año'].between(2009, 2025)]
+    df = df.sort_values(['FechaInicio', 'Expediente'])
+    df = df.reset_index(drop=True)
+    df2['FechaInicio'] = pd.to_datetime(df2['FechaInicio'], errors='coerce')
+    df2['Año'] = df2['FechaInicio'].dt.year
+    df2['Mes'] = df2['FechaInicio'].dt.month
+    df2 = df2[df2['Año'].between(2009, 2025)]
+    df2 = df2.sort_values(['FechaInicio', 'Expediente'])
+    df2 = df2.reset_index(drop=True)
+
+    # Calcular tiempos
+    mask_concluidos = df['F_Conclusion'].notna() & df['FechaInicio'].notna()
+    df.loc[mask_concluidos, 'TiempoDias'] = (
+        df.loc[mask_concluidos, 'F_Conclusion'] - df.loc[mask_concluidos, 'FechaInicio']
+    ).dt.days
+        
+    return df,df2
+
 # Cargar datos
-df,df2 = cargar_datos()
-#df = crear_datos_ejemplo()
+#df,df2 = cargar_datos_access()
+df,df2 = cargar_datos_csv()
 
 # Layout principal
 app.layout = html.Div([
